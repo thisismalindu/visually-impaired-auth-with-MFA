@@ -1,16 +1,14 @@
 # Group Project: Multifactor Authentication for Visually Impaired Users
 
-**Group name:** [ENTER GROUP NAME]
+**Group name:** Cypher
 
-**Student ID:** [ENTER STUDENT ID]
+**Student ID:** 230541N
 
-**Student name with initials:** [ENTER FULL NAME WITH INITIALS]
+**Student name with initials:** R.I.B.S.P.Rathnamalala
 
-**Individual submission:** Member 5 - Email OTP, Resend delivery, and MFA security testing
+**Individual submission:** Email OTP, Resend delivery, and MFA security testing
 
-**Repository branch:** `feature/email-otp`
 
-**Submission format:** Markdown source for conversion to PDF
 
 ---
 
