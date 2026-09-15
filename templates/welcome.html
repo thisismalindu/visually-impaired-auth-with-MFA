@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Welcome | Secure sign in</title>
+</head>
+<body data-speech-prompt="Authentication successful. Welcome {{ username }}.">
+  <main>
+    <h1>Welcome, {{ username }}</h1>
+    <p role="status" aria-live="polite">Authentication successful.</p>
+    <form action="/logout" method="post">
+      <button type="submit">Log out</button>
+    </form>
+  </main>
+  <script src="/static/accessibility.js"></script>
+</body>
+</html>
