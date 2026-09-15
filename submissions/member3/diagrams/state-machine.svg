@@ -1,0 +1,87 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1000 620" font-family="Helvetica, Arial, sans-serif">
+  <title>Figure 2: Server-side login stage state machine</title>
+  <desc>
+    A finite state machine with four states: Start, username_submitted,
+    password_verified, and authenticated. Solid arrows show forward
+    transitions triggered by successful server-side checks. Dashed red
+    arrows show every rejected transition (a stage check failure), which
+    always returns the session to Start. A self-loop on username_submitted
+    represents a failed password attempt that keeps the session at that
+    stage so the user can retry.
+  </desc>
+  <defs>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#1f2937"/>
+    </marker>
+    <marker id="arrow-red" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M0,0 L10,5 L0,10 z" fill="#b91c1c"/>
+    </marker>
+  </defs>
+
+  <rect x="0" y="0" width="1000" height="620" fill="#ffffff"/>
+  <text x="500" y="30" text-anchor="middle" font-size="20" font-weight="bold" fill="#111827">
+    Login Stage State Machine (auth/flow.py)
+  </text>
+
+  <!-- States -->
+  <g>
+    <rect x="20" y="230" width="150" height="70" rx="10" fill="#e5e7eb" stroke="#111827" stroke-width="2"/>
+    <text x="95" y="260" text-anchor="middle" font-size="15" font-weight="bold">Start</text>
+    <text x="95" y="280" text-anchor="middle" font-size="11" fill="#374151">(no auth_stage /</text>
+    <text x="95" y="293" text-anchor="middle" font-size="11" fill="#374151">session cleared)</text>
+  </g>
+
+  <g>
+    <rect x="240" y="230" width="210" height="70" rx="10" fill="#dbeafe" stroke="#1e3a8a" stroke-width="2"/>
+    <text x="345" y="260" text-anchor="middle" font-size="14" font-weight="bold">username_submitted</text>
+    <text x="345" y="278" text-anchor="middle" font-size="11" fill="#1e3a8a">holds: pending_username</text>
+  </g>
+
+  <g>
+    <rect x="520" y="230" width="210" height="70" rx="10" fill="#fef3c7" stroke="#92400e" stroke-width="2"/>
+    <text x="625" y="260" text-anchor="middle" font-size="14" font-weight="bold">password_verified</text>
+    <text x="625" y="278" text-anchor="middle" font-size="11" fill="#92400e">holds: user_id, username</text>
+  </g>
+
+  <g>
+    <rect x="800" y="230" width="180" height="70" rx="10" fill="#dcfce7" stroke="#14532d" stroke-width="2"/>
+    <text x="890" y="260" text-anchor="middle" font-size="14" font-weight="bold">authenticated</text>
+    <text x="890" y="278" text-anchor="middle" font-size="11" fill="#14532d">/welcome permitted</text>
+  </g>
+
+  <!-- Forward transitions -->
+  <line x1="170" y1="265" x2="235" y2="265" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="202" y="250" text-anchor="middle" font-size="10.5">POST /login</text>
+  <text x="202" y="262" text-anchor="middle" font-size="10.5">(non-empty username)</text>
+
+  <line x1="450" y1="265" x2="515" y2="265" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="482" y="250" text-anchor="middle" font-size="10.5">POST /login/password</text>
+  <text x="482" y="262" text-anchor="middle" font-size="10.5">(hash verifies)</text>
+
+  <line x1="730" y1="265" x2="795" y2="265" stroke="#1f2937" stroke-width="2" marker-end="url(#arrow)"/>
+  <text x="762" y="250" text-anchor="middle" font-size="10.5">mark_authenticated()</text>
+  <text x="762" y="262" text-anchor="middle" font-size="10.5">(Member 5, after OTP)</text>
+
+  <!-- Self loop: wrong password -->
+  <path d="M 320 230 C 300 180, 390 180, 370 230" fill="none" stroke="#b91c1c" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow-red)"/>
+  <text x="345" y="175" text-anchor="middle" font-size="10.5" fill="#b91c1c">wrong password: generic error,</text>
+  <text x="345" y="188" text-anchor="middle" font-size="10.5" fill="#b91c1c">stage unchanged, retry allowed</text>
+
+  <!-- Rejected / bypass attempts back to Start -->
+  <path d="M 345 300 C 300 400, 150 400, 95 305" fill="none" stroke="#b91c1c" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow-red)"/>
+  <text x="220" y="425" text-anchor="middle" font-size="10.5" fill="#b91c1c">GET /login (restart) -&gt; session.clear()</text>
+
+  <path d="M 625 300 C 500 450, 200 460, 95 310" fill="none" stroke="#b91c1c" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow-red)"/>
+  <text x="360" y="475" text-anchor="middle" font-size="10.5" fill="#b91c1c">direct GET /login/otp before password_verified -&gt; redirect(/login)</text>
+
+  <path d="M 890 300 C 750 500, 200 510, 95 315" fill="none" stroke="#b91c1c" stroke-width="2" stroke-dasharray="6,4" marker-end="url(#arrow-red)"/>
+  <text x="480" y="525" text-anchor="middle" font-size="10.5" fill="#b91c1c">direct GET /welcome before authenticated -&gt; redirect(/login), and POST /logout -&gt; session.clear()</text>
+
+  <!-- Legend -->
+  <g>
+    <rect x="20" y="555" width="14" height="14" fill="none" stroke="#1f2937" stroke-width="2"/>
+    <text x="42" y="566" font-size="11">Forward transition (server-checked precondition met)</text>
+    <line x1="20" y1="590" x2="34" y2="590" stroke="#b91c1c" stroke-width="2" stroke-dasharray="6,4"/>
+    <text x="42" y="594" font-size="11">Rejected transition / stage-check failure -&gt; redirect to Start</text>
+  </g>
+</svg>
