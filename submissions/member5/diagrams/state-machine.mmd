@@ -1,0 +1,17 @@
+stateDiagram-v2
+    [*] --> start
+    start --> password_verified: password module succeeds
+    password_verified --> password_verified: invalid/expired OTP\n(attempt incremented)
+    password_verified --> password_verified: resend request\n(if cooldown elapsed)
+    password_verified --> authenticated: valid OTP\n(mark used)
+    authenticated --> [*]: welcome/logout flow
+
+    note right of password_verified
+      OTP page is accessible only here.
+      user_id is taken from the protected session.
+    end note
+
+    note right of authenticated
+      OTP module sets this state only after
+      repository mark_otp_used succeeds.
+    end note

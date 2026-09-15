@@ -1,1 +1,1 @@
-"""Authentication helpers and flow modules."""
+"""Authentication components."""
