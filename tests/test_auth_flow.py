@@ -7,7 +7,9 @@ repository rather than the real integrations.
 
 from __future__ import annotations
 
+import pytest
 from flask import Flask
+from flask import session as flask_session
 
 import auth.flow as flow
 from auth.password_utils import hash_password
@@ -35,12 +37,13 @@ def _stub_render_template(monkeypatch):
 
 
 def _make_app(monkeypatch, repository=None):
-    _stub_render_template(monkeypatch)
+    render_calls = _stub_render_template(monkeypatch)
     monkeypatch.setattr(flow, "_load_repository", lambda: repository)
 
     app = Flask(__name__)
     app.config.update(TESTING=True, SECRET_KEY="test-only-secret")
     app.register_blueprint(flow.auth_bp)
+    app.render_calls = render_calls
     return app
 
 
@@ -157,6 +160,124 @@ def test_password_step_bypass_via_direct_navigation_is_blocked(monkeypatch):
 
     assert response.status_code == 302
     assert response.headers["Location"] == "/login"
+
+
+def test_wrong_password_error_message_matches_unknown_username_error_message(monkeypatch):
+    known_repository = FakeRepository(
+        [{"id": 1, "username": "alice", "password_hash": hash_password("correct-horse")}]
+    )
+    unknown_repository = FakeRepository([])
+
+    wrong_password_app = _make_app(monkeypatch, repository=known_repository)
+    client = wrong_password_app.test_client()
+    client.post("/login", data={"username": "alice"})
+    wrong_password_response = client.post("/login/password", data={"password": "wrong-password"})
+
+    unknown_user_app = _make_app(monkeypatch, repository=unknown_repository)
+    client = unknown_user_app.test_client()
+    client.post("/login", data={"username": "nobody"})
+    unknown_user_response = client.post("/login/password", data={"password": "anything"})
+
+    assert wrong_password_response.status_code == unknown_user_response.status_code == 401
+
+    wrong_password_error = wrong_password_app.render_calls[-1][1]["error"]
+    unknown_user_error = unknown_user_app.render_calls[-1][1]["error"]
+    assert wrong_password_error == unknown_user_error == flow.GENERIC_LOGIN_ERROR
+
+
+def test_password_is_never_written_to_the_session(monkeypatch):
+    repository = FakeRepository(
+        [{"id": 1, "username": "alice", "password_hash": hash_password("correct-horse")}]
+    )
+    app = _make_app(monkeypatch, repository=repository)
+    client = app.test_client()
+    client.post("/login", data={"username": "alice"})
+
+    client.post("/login/password", data={"password": "wrong-password"})
+    with client.session_transaction() as test_session:
+        assert "password" not in test_session
+        assert "wrong-password" not in test_session.values()
+
+    client.post("/login/password", data={"password": "correct-horse"})
+    with client.session_transaction() as test_session:
+        assert "password" not in test_session
+        assert "correct-horse" not in test_session.values()
+
+
+def test_otp_style_route_protected_by_require_stage_rejects_before_password_verification(monkeypatch):
+    """Simulates Member 5's /login/otp guard without depending on their module."""
+
+    app = _make_app(monkeypatch)
+
+    @app.get("/login/otp")
+    @flow.require_stage(flow.STAGE_PASSWORD_VERIFIED)
+    def fake_otp_route():
+        return "otp page"
+
+    client = app.test_client()
+
+    response = client.get("/login/otp")
+
+    assert response.status_code == 302
+    assert response.headers["Location"] == "/login"
+
+
+def test_otp_style_route_protected_by_require_stage_allows_after_password_verification(monkeypatch):
+    app = _make_app(monkeypatch)
+
+    @app.get("/login/otp")
+    @flow.require_stage(flow.STAGE_PASSWORD_VERIFIED)
+    def fake_otp_route():
+        return "otp page"
+
+    client = app.test_client()
+    with client.session_transaction() as test_session:
+        test_session["auth_stage"] = flow.STAGE_PASSWORD_VERIFIED
+        test_session["user_id"] = 1
+
+    response = client.get("/login/otp")
+
+    assert response.status_code == 200
+    assert response.data == b"otp page"
+
+
+def test_get_verified_user_id_reads_the_session(monkeypatch):
+    app = _make_app(monkeypatch)
+
+    @app.get("/probe")
+    def probe():
+        return str(flow.get_verified_user_id())
+
+    client = app.test_client()
+    with client.session_transaction() as test_session:
+        test_session["auth_stage"] = flow.STAGE_PASSWORD_VERIFIED
+        test_session["user_id"] = 42
+
+    response = client.get("/probe")
+
+    assert response.data == b"42"
+
+
+def test_mark_authenticated_requires_password_verified_stage(monkeypatch):
+    app = _make_app(monkeypatch)
+
+    with app.test_request_context():
+        flask_session["auth_stage"] = flow.STAGE_USERNAME_SUBMITTED
+
+        with pytest.raises(RuntimeError):
+            flow.mark_authenticated()
+
+
+def test_mark_authenticated_advances_session_to_authenticated(monkeypatch):
+    app = _make_app(monkeypatch)
+
+    with app.test_request_context():
+        flask_session["auth_stage"] = flow.STAGE_PASSWORD_VERIFIED
+        flask_session["user_id"] = 1
+
+        flow.mark_authenticated()
+
+        assert flask_session["auth_stage"] == flow.STAGE_AUTHENTICATED
 
 
 def test_welcome_redirects_without_full_authentication(monkeypatch):
