@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+from jinja2 import DictLoader
 
 from auth.otp import (
     OTPDeliveryError,
@@ -171,7 +172,7 @@ def test_otp_routes_enforce_password_stage_and_authenticate(monkeypatch):
 
     app = flask.Flask(__name__)
     app.secret_key = "test-session-key"
-    app.jinja_loader = flask.DictLoader({"otp.html": "OTP page"})
+    app.jinja_loader = DictLoader({"otp.html": "OTP page"})
 
     @app.get("/login/password")
     def login_password():
@@ -206,7 +207,7 @@ def test_otp_routes_do_not_authenticate_on_wrong_code():
 
     app = flask.Flask(__name__)
     app.secret_key = "test-session-key"
-    app.jinja_loader = flask.DictLoader({"otp.html": "OTP page"})
+    app.jinja_loader = DictLoader({"otp.html": "OTP page"})
 
     @app.get("/login/password")
     def login_password():
