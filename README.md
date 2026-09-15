@@ -1,6 +1,81 @@
-Use the **Master Prompt** below for every member first. Then Members 2–5 should paste their individual prompt after it. The work is intentionally split so each member owns a separate module and can work in a separate Git branch.
+## Accessible MFA Authentication System
 
-## Master Prompt — paste into all 4 teammates' AI agents
+A small Flask application for demonstrating an accessible, keyboard-first multifactor login process for visually impaired users.
+
+## Project Scope
+
+The planned authentication flow is:
+
+1. Enter a username.
+2. Enter the password.
+3. Enter the six-digit code sent to the registered email address.
+4. View the authenticated welcome page.
+5. Log out and invalidate the session.
+
+The application uses the browser's built-in `SpeechSynthesis` API for prompts. It does not implement a screen reader. Users can read the OTP email with the screen reader already available on their device.
+
+## Accessible UI Module
+
+This branch, `feature/accessibility-ui`, contains the accessible frontend and text-to-speech module:
+
+- `templates/username.html` - username entry page
+- `templates/password.html` - password entry page
+- `templates/otp.html` - email OTP entry page
+- `templates/welcome.html` - authenticated welcome page and logout form
+- `static/accessibility.js` - reusable browser speech and focus helper
+- `tests/test_accessibility.py` - dependency-free accessibility contract tests
+
+Each authentication page contains one main input, an explicit label, automatic focus, a standard POST form, and a keyboard-accessible submit button. Server-returned errors are placed in live regions for assistive technology.
+
+## Expected Routes
+
+The templates use these route contracts for integration with the Flask backend:
+
+| Page or action | Method | Route |
+| --- | --- | --- |
+| Username submission | `POST` | `/login` |
+| Password submission | `POST` | `/login/password` |
+| OTP submission | `POST` | `/login/otp` |
+| Logout | `POST` | `/logout` |
+
+The backend is responsible for authentication decisions, session state, redirects, password verification, OTP generation, and email delivery. JavaScript does not decide whether authentication succeeds.
+
+## Text-to-Speech Safety
+
+Speech prompts are fixed page instructions. The accessibility script:
+
+- speaks the page instruction once after loading;
+- focuses the page's main input;
+- cancels an earlier speech request before starting a new one;
+- never reads password or OTP input values;
+- never speaks continuously while the user types.
+
+## Running the UI Tests
+
+The tests use only Python's standard library and can run before Flask and database integration are added:
+
+```bash
+python3 -m unittest tests.test_accessibility -v
+```
+
+They verify labels, autofocus, form methods and actions, expected input counts, script inclusion, and the absence of sensitive input values from speech prompts.
+
+## Planned Technology Stack
+
+- Python and Flask
+- Plain semantic HTML
+- Minimal JavaScript
+- Browser `SpeechSynthesis` API
+- Neon PostgreSQL
+- Resend email API
+- Argon2 or bcrypt password hashing
+- pytest for the complete project test suite
+
+## Security Notes
+
+The completed application must keep passwords and OTPs hashed, generate OTPs with Python's `secrets` module, expire and limit OTP attempts, enforce the authentication order server-side, parameterize database queries, and load secrets from environment variables. Production deployment assumes HTTPS.
+
+Registration, password reset, SMS OTP, authenticator apps, biometrics, CAPTCHA, and custom screen-reader software are outside the project scope.
 
 ```text
 You are helping with a 5-person university Computer Security assignment.
