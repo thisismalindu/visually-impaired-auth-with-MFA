@@ -65,7 +65,9 @@ def test_otp_creation_and_active_lookup():
     expiry = datetime.now(timezone.utc)
     with patch("database.repository.connection") as connection:
         connection.return_value.__enter__.return_value = conn
-        assert repository.create_otp_challenge(1, "otp-hash", expiry) == challenge
+        assert repository.create_otp_challenge(
+            1, "otp-hash", expiry, datetime.now(timezone.utc)
+        ) == challenge
         assert repository.get_active_otp_challenge(1) == challenge
     assert conn.execute.call_args.args[1] == (1,)
 

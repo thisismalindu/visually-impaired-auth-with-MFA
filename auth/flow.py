@@ -21,8 +21,9 @@ from __future__ import annotations
 from functools import wraps
 from typing import Any, Callable
 
-from flask import Blueprint, redirect, render_template, request, session, url_for
+from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 
+from auth.otp import OTPDeliveryError, OTPResendTooSoon
 from auth.password_utils import hash_password, verify_password
 
 auth_bp = Blueprint("auth", __name__)
@@ -162,9 +163,27 @@ def login_password_submit():
         return render_template("password.html", error=GENERIC_LOGIN_ERROR), 401
 
     session.clear()
+    user_id = _field(user, "id")
+    username = _field(user, "username")
     session["auth_stage"] = STAGE_PASSWORD_VERIFIED
-    session["user_id"] = _field(user, "id")
-    session["username"] = _field(user, "username")
+    session["user_id"] = user_id
+    session["username"] = username
+
+    otp_service = current_app.extensions["otp_service"]
+    try:
+        otp_service.issue(user_id, _field(user, "email"))
+    except OTPResendTooSoon:
+        # An unexpired challenge already exists; the user can enter that code.
+        pass
+    except OTPDeliveryError:
+        session.clear()
+        session["auth_stage"] = STAGE_USERNAME_SUBMITTED
+        session["pending_username"] = username
+        return render_template(
+            "password.html",
+            error="We could not send a sign-in code. Please try again.",
+        ), 503
+
     return redirect(OTP_LOGIN_PATH)
 
 

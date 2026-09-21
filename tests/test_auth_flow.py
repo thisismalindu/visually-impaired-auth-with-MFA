@@ -17,10 +17,17 @@ from auth.password_utils import hash_password
 
 class FakeRepository:
     def __init__(self, users):
+        for user in users:
+            user.setdefault("email", "alice@example.test")
         self._users_by_name = {user["username"]: user for user in users}
 
     def get_user_by_username(self, username):
         return self._users_by_name.get(username)
+
+
+class FakeOTPService:
+    def issue(self, user_id, recipient):
+        return None
 
 
 def _stub_render_template(monkeypatch):
@@ -43,6 +50,7 @@ def _make_app(monkeypatch, repository=None):
     app = Flask(__name__)
     app.config.update(TESTING=True, SECRET_KEY="test-only-secret")
     app.register_blueprint(flow.auth_bp)
+    app.extensions["otp_service"] = FakeOTPService()
     app.render_calls = render_calls
     return app
 

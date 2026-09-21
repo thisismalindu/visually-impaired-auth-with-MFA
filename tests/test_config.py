@@ -59,6 +59,13 @@ def test_secret_names_have_no_committed_values():
     example_path = Path(__file__).parents[1] / ".env.example"
     example = example_path.read_text(encoding="utf-8")
 
-    assert "SECRET_KEY=\n" in example
-    assert "DATABASE_URL=\n" in example
-    assert "RESEND_API_KEY=\n" in example
+    settings = {}
+    for line in example.splitlines():
+        if "=" in line:
+            name, value = line.split("=", 1)
+            settings.setdefault(name, []).append(value)
+
+    assert len(settings["SECRET_KEY"]) == 1 and settings["SECRET_KEY"][0] == ""
+    assert len(settings["DATABASE_URL"]) == 1 and settings["DATABASE_URL"][0] == ""
+    assert len(settings["RESEND_API_KEY"]) == 1 and settings["RESEND_API_KEY"][0] == ""
+    assert len(settings["RESEND_FROM_EMAIL"]) == 1 and settings["RESEND_FROM_EMAIL"][0] == ""

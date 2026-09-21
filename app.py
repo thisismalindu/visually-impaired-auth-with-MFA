@@ -6,22 +6,38 @@ from typing import Any
 
 from flask import Flask, jsonify
 
+from auth.flow import auth_bp
+from auth.otp import OTPService, OTPSettings, ResendEmailSender, create_otp_blueprint
 from config import load_config, validate_required_config
 
 
 def _register_integrated_blueprints(app: Flask) -> None:
-    """Register member blueprints when their modules are merged.
+    """Construct the OTP service and register the completed authentication modules."""
+    from database import repository
 
-    The imports stay optional while the parallel feature branches are under
-    development. Integration should replace this hook's comments with imports
-    of the completed blueprints, keeping application construction centralized.
-    """
+    otp_service = app.config.get("OTP_SERVICE")
+    if otp_service is None:
+        otp_service = OTPService(
+            repository=app.config.get("OTP_REPOSITORY", repository),
+            email_sender=ResendEmailSender(
+                app.config.get("RESEND_API_KEY"),
+                app.config.get("RESEND_FROM_EMAIL"),
+            ),
+            settings=OTPSettings(
+                secret_key=app.config["SECRET_KEY"],
+                application_name=app.config["APP_NAME"],
+                lifetime_seconds=app.config["OTP_EXPIRY_SECONDS"],
+                max_attempts=app.config["OTP_MAX_ATTEMPTS"],
+                resend_cooldown_seconds=app.config["OTP_RESEND_COOLDOWN_SECONDS"],
+            ),
+        )
+    otp_repository = app.config.get("OTP_REPOSITORY", repository)
+    app.extensions["otp_service"] = otp_service
 
-    # Example integration points (not implemented on the foundation branch):
-    # from auth.flow import auth_bp
-    # from auth.otp import otp_bp
-    # app.register_blueprint(auth_bp)
-    # app.register_blueprint(otp_bp)
+    app.register_blueprint(auth_bp)
+    app.register_blueprint(
+        create_otp_blueprint(otp_service, otp_repository)
+    )
 
 
 def create_app(test_config: dict[str, Any] | None = None) -> Flask:

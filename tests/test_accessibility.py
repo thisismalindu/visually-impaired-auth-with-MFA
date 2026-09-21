@@ -89,6 +89,18 @@ class AccessibilityTemplateTests(unittest.TestCase):
         self.assertNotIn("password", script.lower())
         self.assertNotIn("otp", script.lower())
 
+    def test_otp_page_has_keyboard_resend_and_accessible_message_regions(self):
+        page = load_template("otp")
+        self.assertIn({"action": "/login/otp/resend", "method": "post"}, page.forms)
+        markup = (ROOT / "templates" / "otp.html").read_text()
+        self.assertIn('role="alert"', markup)
+        self.assertIn('role="status"', markup)
+
+    def test_accessibility_script_speaks_status_or_error_before_page_prompt(self):
+        script = (ROOT / "static" / "accessibility.js").read_text()
+        self.assertIn('[role="alert"], [role="status"]', script)
+        self.assertIn("announcement ? announcement.textContent.trim() : prompt", script)
+
 
 if __name__ == "__main__":
     unittest.main()

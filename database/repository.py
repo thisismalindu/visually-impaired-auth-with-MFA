@@ -66,16 +66,17 @@ def create_otp_challenge(
     user_id: int,
     otp_hash: str,
     expires_at: datetime,
+    sent_at: datetime,
 ) -> dict[str, Any]:
     with connection() as conn:
         return conn.execute(
             """
-            INSERT INTO otp_challenges (user_id, otp_hash, expires_at)
-            VALUES (%s, %s, %s)
+            INSERT INTO otp_challenges (user_id, otp_hash, expires_at, sent_at)
+            VALUES (%s, %s, %s, %s)
             RETURNING id, user_id, otp_hash, expires_at, used,
                       failed_attempts, created_at, sent_at
             """,
-            (user_id, otp_hash, expires_at),
+            (user_id, otp_hash, expires_at, sent_at),
         ).fetchone()
 
 

@@ -22,7 +22,7 @@ class OTPRepository(Protocol):
     def create_otp_challenge(self, user_id: int, otp_hash: str, expires_at: datetime, sent_at: datetime) -> Any: ...
     def get_active_otp_challenge(self, user_id: int) -> Any | None: ...
     def increment_otp_attempts(self, challenge_id: int) -> None: ...
-    def mark_otp_used(self, challenge_id: int) -> None: ...
+    def mark_otp_used(self, challenge_id: int) -> bool: ...
 
 
 class OTPEmailSender(Protocol):
@@ -139,7 +139,8 @@ class OTPService:
             self.repository.increment_otp_attempts(int(_field(challenge, "id")))
             raise OTPVerificationError("The code is invalid or expired.")
 
-        self.repository.mark_otp_used(int(_field(challenge, "id")))
+        if not self.repository.mark_otp_used(int(_field(challenge, "id"))):
+            raise OTPVerificationError("The code is invalid or expired.")
         return True
 
 
@@ -170,45 +171,63 @@ class ResendEmailSender:
 
 def create_otp_blueprint(service: OTPService, repository: Any, template_name: str = "otp.html") -> Any:
     """Create OTP routes using the shared ``auth_stage`` and ``user_id`` session keys."""
-    from flask import Blueprint, flash, redirect, render_template, request, session, url_for
+    from flask import Blueprint, redirect, render_template, request, session, url_for
+
+    from auth.flow import (
+        STAGE_PASSWORD_VERIFIED,
+        mark_authenticated,
+        require_stage,
+    )
 
     blueprint = Blueprint("otp", __name__)
 
     def user_value(user: Any, name: str) -> Any:
         return user[name] if isinstance(user, Mapping) else getattr(user, name)
 
-    def password_verified() -> bool:
-        return session.get("auth_stage") == "password_verified" and session.get("user_id") is not None
+    def current_user() -> Any | None:
+        user_id = session.get("user_id")
+        return repository.get_user_by_id(int(user_id)) if user_id is not None else None
+
+    def require_existing_user() -> Any | None:
+        user = current_user()
+        if user is None:
+            session.clear()
+        return user
 
     @blueprint.get("/login/otp")
+    @require_stage(STAGE_PASSWORD_VERIFIED)
     def otp_page() -> Any:
-        if not password_verified():
-            return redirect(url_for("login_password"))
+        if require_existing_user() is None:
+            return redirect(url_for("auth.login_username"))
         return render_template(template_name)
 
     @blueprint.post("/login/otp")
+    @require_stage(STAGE_PASSWORD_VERIFIED)
     def verify_otp() -> Any:
-        if not password_verified():
-            return redirect(url_for("login_password"))
+        if require_existing_user() is None:
+            return redirect(url_for("auth.login_username"))
         try:
             service.verify(int(session["user_id"]), request.form.get("otp", ""))
         except OTPVerificationError as exc:
-            flash(str(exc), "error")
-            return render_template(template_name), 401
-        session["auth_stage"] = "authenticated"
-        return redirect(url_for("welcome"))
+            return render_template(template_name, error=str(exc)), 401
+        mark_authenticated()
+        return redirect(url_for("auth.welcome"))
 
     @blueprint.post("/login/otp/resend")
+    @require_stage(STAGE_PASSWORD_VERIFIED)
     def resend_otp() -> Any:
-        if not password_verified():
-            return redirect(url_for("login_password"))
-        user = repository.get_user_by_id(int(session["user_id"]))
+        user = require_existing_user()
+        if user is None:
+            return redirect(url_for("auth.login_username"))
         try:
             service.issue(int(session["user_id"]), str(user_value(user, "email")))
-        except OTPResendTooSoon:
-            flash("Please wait before requesting another code.", "error")
+        except OTPResendTooSoon as exc:
+            return render_template(template_name, error=str(exc)), 429
         except OTPDeliveryError:
-            flash("We could not send a new code. Please try again later.", "error")
-        return redirect(url_for("otp.otp_page"))
+            return render_template(
+                template_name,
+                error="We could not send a new code. Please try again later.",
+            ), 503
+        return render_template(template_name, status="A new code was sent to your email.")
 
     return blueprint

@@ -13,12 +13,13 @@
   function initializeAccessibility() {
     var prompt = document.body.dataset.speechPrompt;
     var mainInput = document.querySelector("main form input");
+    var announcement = document.querySelector('[role="alert"], [role="status"]');
 
     if (mainInput) {
       mainInput.focus();
     }
 
-    speak(prompt);
+    speak(announcement ? announcement.textContent.trim() : prompt);
   }
 
   window.accessibility = { speak: speak };

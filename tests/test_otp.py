@@ -22,6 +22,10 @@ class FakeRepository:
         self.next_id = 1
         self.invalidations = 0
         self.attempt_increments = 0
+        self.users = {7: {"id": 7, "email": "user@example.test"}}
+
+    def get_user_by_id(self, user_id):
+        return self.users.get(user_id)
 
     def invalidate_active_otp_challenges(self, user_id):
         self.invalidations += 1
@@ -43,6 +47,7 @@ class FakeRepository:
 
     def mark_otp_used(self, challenge_id):
         self.challenge["used"] = True
+        return True
 
 
 class FakeSender:
@@ -78,6 +83,16 @@ def test_correct_code_succeeds_and_used_code_cannot_replay(monkeypatch):
     monkeypatch.setattr(service, "_new_otp", lambda: "123456")
     service.issue(7, "user@example.test")
     assert service.verify(7, "123456") is True
+    with pytest.raises(OTPVerificationError):
+        service.verify(7, "123456")
+
+
+def test_code_is_rejected_if_another_request_consumed_challenge_first(monkeypatch):
+    service, repo, _ = make_service()
+    monkeypatch.setattr(service, "_new_otp", lambda: "123456")
+    service.issue(7, "user@example.test")
+    repo.mark_otp_used = lambda challenge_id: False
+
     with pytest.raises(OTPVerificationError):
         service.verify(7, "123456")
 
@@ -174,20 +189,14 @@ def test_otp_routes_enforce_password_stage_and_authenticate(monkeypatch):
     app.secret_key = "test-session-key"
     app.jinja_loader = DictLoader({"otp.html": "OTP page"})
 
-    @app.get("/login/password")
-    def login_password():
-        return "password"
-
-    @app.get("/welcome")
-    def welcome():
-        return "welcome"
-
+    from auth.flow import auth_bp
+    app.register_blueprint(auth_bp)
     app.register_blueprint(create_otp_blueprint(service, repo))
     client = app.test_client()
 
     response = client.get("/login/otp")
     assert response.status_code == 302
-    assert response.headers["Location"].endswith("/login/password")
+    assert response.headers["Location"].endswith("/login")
 
     with client.session_transaction() as session:
         session["auth_stage"] = "password_verified"
@@ -209,14 +218,8 @@ def test_otp_routes_do_not_authenticate_on_wrong_code():
     app.secret_key = "test-session-key"
     app.jinja_loader = DictLoader({"otp.html": "OTP page"})
 
-    @app.get("/login/password")
-    def login_password():
-        return "password"
-
-    @app.get("/welcome")
-    def welcome():
-        return "welcome"
-
+    from auth.flow import auth_bp
+    app.register_blueprint(auth_bp)
     app.register_blueprint(create_otp_blueprint(service, repo))
     client = app.test_client()
     with client.session_transaction() as session:
