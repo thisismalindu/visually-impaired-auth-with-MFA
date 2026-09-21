@@ -1,0 +1,37 @@
+sequenceDiagram
+    actor User
+    participant Browser
+    participant Flask as OTP Blueprint
+    participant Service as OTPService
+    participant Repo as OTP Repository
+    participant Resend as Resend API
+
+    Note over Browser,Flask: Session must contain auth_stage=password_verified and user_id
+    User->>Browser: Open OTP page
+    Browser->>Flask: GET /login/otp
+    Flask->>Flask: Check session stage
+    Flask-->>Browser: Render one-code OTP page
+
+    Browser->>Flask: POST /login/otp with code
+    Flask->>Service: verify(user_id, submitted_code)
+    Service->>Repo: Get active challenge for user_id
+    Repo-->>Service: otp_hash, expiry, attempts, used state
+    Service->>Service: Check attempts and expiry
+    Service->>Service: HMAC(code), compare_digest
+
+    alt Code is valid
+        Service->>Repo: mark_otp_used(challenge_id)
+        Flask->>Flask: Set auth_stage=authenticated
+        Flask-->>Browser: Redirect /welcome
+    else Code is invalid or expired
+        Service->>Repo: increment_otp_attempts(challenge_id)
+        Flask-->>Browser: Generic error; remain password_verified
+    end
+
+    User->>Browser: Request resend
+    Browser->>Flask: POST /login/otp/resend
+    Flask->>Service: issue(user_id, registered_email)
+    Service->>Repo: Check sent_at cooldown
+    Service->>Resend: Send new plain-text OTP
+    Resend-->>Service: Success or provider failure
+    Service->>Repo: Invalidate old, create new HMAC challenge
