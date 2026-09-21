@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="880" viewBox="0 0 1400 880" role="img" aria-labelledby="title desc">
+  <title id="title">Application factory and configuration flow</title>
+  <desc id="desc">A flowchart showing environment variables and optional test overrides entering load_config, validation for non-test startup, safe failure for missing values, and registration of health and future blueprints.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto"><path d="M0,0 L0,6 L9,3 z" fill="#334155"/></marker>
+    <style>
+      .title{font:700 28px Arial,sans-serif;fill:#0f172a}.subtitle{font:16px Arial,sans-serif;fill:#475569}
+      .head{font:700 17px Arial,sans-serif;fill:#0f172a}.body{font:14px Arial,sans-serif;fill:#1e293b}
+      .label{font:700 13px Arial,sans-serif;fill:#1e3a8a}.box{fill:#f8fafc;stroke:#64748b;stroke-width:2}
+      .owned{fill:#dbeafe;stroke:#1d4ed8;stroke-width:2.5}.safe{fill:#dcfce7;stroke:#15803d;stroke-width:2.5}
+      .warn{fill:#fee2e2;stroke:#b91c1c;stroke-width:2.5}.test{fill:#f3e8ff;stroke:#7e22ce;stroke-width:2;stroke-dasharray:8 5}
+      .edge{stroke:#334155;stroke-width:2.2;fill:none;marker-end:url(#arrow)}.dash{stroke-dasharray:8 5}
+    </style>
+  </defs>
+  <rect width="1400" height="880" fill="#ffffff"/>
+  <text x="700" y="42" text-anchor="middle" class="title">Figure 2 — Application factory and configuration flow</text>
+  <text x="700" y="70" text-anchor="middle" class="subtitle">Runtime values are validated before the Flask app is returned; test overrides follow a separate dashed path</text>
+
+  <rect x="70" y="120" width="300" height="205" rx="12" class="box"/>
+  <text x="220" y="154" text-anchor="middle" class="head">Environment / local .env</text>
+  <text x="95" y="188" class="body">Required: SECRET_KEY</text>
+  <text x="95" y="214" class="body">DATABASE_URL</text>
+  <text x="95" y="240" class="body">RESEND_API_KEY</text>
+  <text x="95" y="266" class="body">RESEND_FROM_EMAIL</text>
+  <text x="95" y="300" class="body">Non-secret OTP policy overrides</text>
+
+  <rect x="480" y="130" width="360" height="180" rx="12" class="owned"/>
+  <text x="660" y="164" text-anchor="middle" class="head">load_config()</text>
+  <text x="505" y="198" class="body">1. load_dotenv()</text>
+  <text x="505" y="224" class="body">2. read environment values</text>
+  <text x="505" y="250" class="body">3. parse positive integer policies</text>
+  <text x="505" y="276" class="body">4. use defaults only for non-secrets</text>
+
+  <rect x="970" y="120" width="330" height="205" rx="12" class="test"/>
+  <text x="1135" y="154" text-anchor="middle" class="head">Explicit test_config</text>
+  <text x="995" y="188" class="body">TESTING = True</text>
+  <text x="995" y="214" class="body">test-only SECRET_KEY</text>
+  <text x="995" y="248" class="body">Applied after shared configuration</text>
+  <text x="995" y="274" class="body">No live Neon or Resend needed</text>
+  <text x="995" y="300" class="body">Never enabled in deployment</text>
+
+  <path d="M370 220 L478 220" class="edge"/><text x="424" y="205" text-anchor="middle" class="label">read</text>
+  <path d="M970 220 L842 220" class="edge dash"/><text x="906" y="205" text-anchor="middle" class="label">override</text>
+
+  <rect x="500" y="380" width="320" height="110" rx="12" class="owned"/>
+  <text x="660" y="416" text-anchor="middle" class="head">Flask app.config</text>
+  <text x="525" y="450" class="body">Central dictionary used by all modules</text>
+  <text x="525" y="475" class="body">No secret value is printed</text>
+  <path d="M660 310 L660 378" class="edge"/>
+
+  <polygon points="660,545 810,625 660,705 510,625" fill="#fef3c7" stroke="#b45309" stroke-width="2.5"/>
+  <text x="660" y="614" text-anchor="middle" class="head">TESTING?</text>
+  <text x="660" y="640" text-anchor="middle" class="body">Is validation bypass allowed?</text>
+  <path d="M660 490 L660 543" class="edge"/>
+
+  <rect x="930" y="570" width="350" height="115" rx="12" class="owned"/>
+  <text x="1105" y="606" text-anchor="middle" class="head">validate_required_config()</text>
+  <text x="955" y="640" class="body">Check presence of four runtime settings</text>
+  <text x="955" y="666" class="body">Report names only, never contents</text>
+  <path d="M810 625 L928 625" class="edge"/><text x="869" y="608" text-anchor="middle" class="label">No</text>
+
+  <rect x="930" y="748" width="350" height="85" rx="12" class="warn"/>
+  <text x="1105" y="782" text-anchor="middle" class="head">ConfigurationError</text>
+  <text x="1105" y="809" text-anchor="middle" class="body">Fail fast with missing setting names</text>
+  <path d="M1105 685 L1105 746" class="edge"/><text x="1128" y="720" class="label">Missing</text>
+
+  <rect x="120" y="560" width="310" height="145" rx="12" class="safe"/>
+  <text x="275" y="596" text-anchor="middle" class="head">Register foundation routes</text>
+  <text x="145" y="630" class="body">GET /health → {"status": "ok"}</text>
+  <text x="145" y="656" class="body">Call blueprint integration hook</text>
+  <text x="145" y="682" class="body">Return configured Flask app</text>
+  <path d="M510 625 L432 625" class="edge dash"/><text x="471" y="608" text-anchor="middle" class="label">Yes</text>
+  <path d="M930 615 C810 535, 520 535, 430 590" class="edge"/><text x="705" y="542" text-anchor="middle" class="label">All present</text>
+
+  <rect x="120" y="760" width="310" height="70" rx="12" class="safe"/>
+  <text x="275" y="802" text-anchor="middle" class="head">Application ready</text>
+  <path d="M275 705 L275 758" class="edge"/>
+</svg>

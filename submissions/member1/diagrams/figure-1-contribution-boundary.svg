@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1400" height="840" viewBox="0 0 1400 840" role="img" aria-labelledby="title desc">
+  <title id="title">Member 1 contribution boundary and integration contracts</title>
+  <desc id="desc">A component diagram showing Member 1's foundation in the centre, connected by labelled contracts to the accessibility, password flow, database, and OTP modules owned by Members 2 to 5.</desc>
+  <defs>
+    <marker id="arrow" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+    <style>
+      .title{font:700 28px Arial,sans-serif;fill:#0f172a}.subtitle{font:16px Arial,sans-serif;fill:#475569}
+      .box-title{font:700 18px Arial,sans-serif;fill:#0f172a}.body{font:15px Arial,sans-serif;fill:#1e293b}
+      .small{font:13px Arial,sans-serif;fill:#334155}.edge{stroke:#334155;stroke-width:2.4;fill:none;marker-end:url(#arrow)}
+      .edge-label{font:700 13px Arial,sans-serif;fill:#1e3a8a}.owned{fill:#dbeafe;stroke:#1d4ed8;stroke-width:3}
+      .external{fill:#f8fafc;stroke:#64748b;stroke-width:2}.service{fill:#fef3c7;stroke:#b45309;stroke-width:2}
+    </style>
+  </defs>
+  <rect width="1400" height="840" fill="#ffffff"/>
+  <text x="700" y="42" text-anchor="middle" class="title">Figure 1 — Member 1 contribution boundary and integration contracts</text>
+  <text x="700" y="70" text-anchor="middle" class="subtitle">Solid blue boundary = implemented by Member 1; grey boxes = independently owned team modules</text>
+
+  <rect x="445" y="205" width="510" height="430" rx="14" class="owned"/>
+  <text x="700" y="240" text-anchor="middle" class="box-title">Member 1 — Project and security foundation</text>
+  <line x1="475" y1="256" x2="925" y2="256" stroke="#93c5fd" stroke-width="2"/>
+  <text x="485" y="289" class="body">• app.py — create_app(), /health, integration hook</text>
+  <text x="485" y="324" class="body">• config.py — environment loading and validation</text>
+  <text x="485" y="359" class="body">• auth/password_utils.py — Argon2 helpers</text>
+  <text x="485" y="394" class="body">• scripts/create_user.py — safe demo provisioning</text>
+  <text x="485" y="429" class="body">• README.md — ownership and interface contracts</text>
+  <text x="485" y="464" class="body">• requirements.txt / .gitignore / .env.example</text>
+  <text x="485" y="499" class="body">• smoke, configuration, and password-helper tests</text>
+  <rect x="485" y="535" width="430" height="68" rx="8" fill="#eff6ff" stroke="#60a5fa"/>
+  <text x="700" y="562" text-anchor="middle" class="small">Integration rule</text>
+  <text x="700" y="585" text-anchor="middle" class="small">Member 1 wires completed modules; module logic stays with its owner.</text>
+
+  <rect x="60" y="115" width="315" height="160" rx="12" class="external"/>
+  <text x="218" y="148" text-anchor="middle" class="box-title">Member 2 — Accessible UI</text>
+  <text x="85" y="181" class="body">Semantic templates</text>
+  <text x="85" y="208" class="body">Keyboard / autofocus</text>
+  <text x="85" y="235" class="body">SpeechSynthesis prompts</text>
+
+  <rect x="1025" y="115" width="315" height="160" rx="12" class="external"/>
+  <text x="1182" y="148" text-anchor="middle" class="box-title">Member 3 — Password flow</text>
+  <text x="1050" y="181" class="body">Username/password routes</text>
+  <text x="1050" y="208" class="body">Session-stage guards</text>
+  <text x="1050" y="235" class="body">Generic authentication errors</text>
+
+  <rect x="60" y="655" width="315" height="150" rx="12" class="external"/>
+  <text x="218" y="688" text-anchor="middle" class="box-title">Member 4 — Data layer</text>
+  <text x="85" y="721" class="body">Neon PostgreSQL schema</text>
+  <text x="85" y="748" class="body">Connections / transactions</text>
+  <text x="85" y="775" class="body">Parameterized repository API</text>
+
+  <rect x="1025" y="655" width="315" height="150" rx="12" class="external"/>
+  <text x="1182" y="688" text-anchor="middle" class="box-title">Member 5 — Email OTP</text>
+  <text x="1050" y="721" class="body">Secure OTP lifecycle</text>
+  <text x="1050" y="748" class="body">Resend delivery</text>
+  <text x="1050" y="775" class="body">Expiry / attempts / replay control</text>
+
+  <path d="M375 210 C410 210, 410 290, 445 290" class="edge"/>
+  <text x="392" y="194" class="edge-label">template names + JS path</text>
+  <path d="M1025 210 C990 210, 990 320, 955 320" class="edge"/>
+  <text x="965" y="194" text-anchor="end" class="edge-label">blueprint + session stages</text>
+  <path d="M375 730 C410 730, 410 560, 445 560" class="edge"/>
+  <text x="390" y="714" class="edge-label">repository functions</text>
+  <path d="M1025 730 C990 730, 990 530, 955 530" class="edge"/>
+  <text x="1010" y="714" text-anchor="end" class="edge-label">OTP service functions + config</text>
+
+  <rect x="90" y="335" width="240" height="90" rx="10" class="service"/>
+  <text x="210" y="370" text-anchor="middle" class="box-title">Existing assistive tech</text>
+  <text x="210" y="399" text-anchor="middle" class="small">Screen reader / keyboard</text>
+  <path d="M210 335 L210 277" class="edge"/>
+
+  <rect x="1070" y="385" width="220" height="90" rx="10" class="service"/>
+  <text x="1180" y="420" text-anchor="middle" class="box-title">External services</text>
+  <text x="1180" y="449" text-anchor="middle" class="small">Neon PostgreSQL + Resend</text>
+  <path d="M1180 475 L1180 653" class="edge"/>
+</svg>
