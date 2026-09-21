@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Username | Secure sign in</title>
+</head>
+<body data-speech-prompt="Type your username now.">
+  <main>
+    <h1>Sign in</h1>
+    <p id="instruction">Type your username now.</p>
+
+    {% if error %}
+    <p id="authentication-error" role="alert" aria-live="assertive">{{ error }}</p>
+    {% endif %}
+
+    <form action="/login" method="post">
+      <label for="username">Username</label>
+      <input id="username" name="username" type="text" autocomplete="username" required autofocus>
+      <button type="submit">Continue</button>
+    </form>
+  </main>
+  <script src="/static/accessibility.js"></script>
+</body>
+</html>

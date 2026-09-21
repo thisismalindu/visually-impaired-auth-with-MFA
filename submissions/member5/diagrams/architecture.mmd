@@ -1,0 +1,19 @@
+flowchart LR
+    U[User with accessible email client\nreads OTP using existing screen reader]
+    B[Browser\nOTP form and session cookie]
+    R[Flask OTP blueprint\nGET/POST /login/otp\nPOST /login/otp/resend]
+    S[OTPService\nexpiry, attempts, HMAC, replay checks]
+    E[ResendEmailSender\nHTTPS API request]
+    X[Resend API\nemail provider]
+    D[(OTP challenge repository\nuser_id, otp_hash, expires_at,\nused, failed_attempts, sent_at)]
+    P[Password-flow module\nsets password_verified + user_id]
+
+    P -->|shared session stage| R
+    B -->|authenticated session| R
+    R --> S
+    S -->|create/invalidate/read/update| D
+    S --> E
+    E -->|Bearer API key, plain-text email| X
+    X -->|OTP message| U
+    U -->|typed six-digit code| B
+    R -->|authenticated only after verify success| B

@@ -1,0 +1,18 @@
+erDiagram
+    USERS ||--o{ OTP_CHALLENGES : receives
+    USERS {
+        integer id PK
+        string username
+        string email
+        string password_hash
+    }
+    OTP_CHALLENGES {
+        integer id PK
+        integer user_id FK
+        string otp_hash
+        datetime expires_at
+        boolean used
+        integer failed_attempts
+        datetime created_at
+        datetime sent_at
+    }
