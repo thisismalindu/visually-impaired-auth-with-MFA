@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from flask import Flask, jsonify
+from flask import Flask, jsonify, redirect, url_for
 
 from auth.flow import auth_bp
 from auth.otp import OTPService, OTPSettings, ResendEmailSender, create_otp_blueprint
@@ -60,6 +60,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
         return jsonify(status="ok"), 200
 
     _register_integrated_blueprints(app)
+
+    @app.get("/")
+    def index() -> Any:
+        return redirect(url_for("auth.login_username"))
+
     return app
 
 

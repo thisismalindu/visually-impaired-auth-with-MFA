@@ -1,0 +1,35 @@
+stateDiagram-v2
+    [*] --> home
+
+    home --> login_username: Log in
+    home --> signup_username: Sign up
+
+    login_username --> login_password: username submitted
+    login_password --> login_otp: active user + valid password
+    login_password --> login_username: invalid / inactive / unknown
+    login_otp --> login_otp: invalid, expired, or exhausted OTP
+    login_otp --> authenticated: valid login OTP consumed
+    authenticated --> home: logout
+
+    signup_username --> signup_email: username accepted
+    signup_email --> signup_password: email accepted
+    signup_password --> signup_confirm: password hash stored in draft
+    signup_confirm --> signup_password: mismatch
+    signup_confirm --> signup_otp: matching confirmation
+    signup_otp --> signup_otp: invalid, expired, or exhausted OTP
+    signup_otp --> login_username: valid signup OTP activates account
+
+    login_otp --> home: route guard failure
+    signup_otp --> home: route guard failure
+    authenticated --> home: direct access after logout
+
+    note right of login_otp
+      purpose = login
+      user must be active
+    end note
+
+    note right of signup_otp
+      purpose = signup
+      successful use activates user
+      and never authenticates session
+    end note

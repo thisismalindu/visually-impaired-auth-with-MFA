@@ -23,7 +23,12 @@ from typing import Any, Callable
 
 from flask import Blueprint, current_app, redirect, render_template, request, session, url_for
 
-from auth.otp import OTPDeliveryError, OTPResendTooSoon
+from auth.otp import (
+    GENERIC_STORAGE_ERROR,
+    OTPDeliveryError,
+    OTPResendTooSoon,
+    OTPStorageError,
+)
 from auth.password_utils import hash_password, verify_password
 
 auth_bp = Blueprint("auth", __name__)
@@ -149,7 +154,14 @@ def login_password_submit():
     username = session.get("pending_username", "")
 
     repository = _load_repository()
-    user = repository.get_user_by_username(username) if repository else None
+    try:
+        user = repository.get_user_by_username(username) if repository else None
+    except Exception as exc:
+        current_app.logger.warning(
+            "User lookup failed during password authentication: error_type=%s",
+            type(exc).__name__,
+        )
+        return render_template("password.html", error=GENERIC_STORAGE_ERROR), 503
 
     # Verify against a real hash when the user exists, otherwise against the
     # dummy hash, so a nonexistent username is not distinguishable by timing
@@ -182,6 +194,14 @@ def login_password_submit():
         return render_template(
             "password.html",
             error="We could not send a sign-in code. Please try again.",
+        ), 503
+    except OTPStorageError:
+        session.clear()
+        session["auth_stage"] = STAGE_USERNAME_SUBMITTED
+        session["pending_username"] = username
+        return render_template(
+            "password.html",
+            error=GENERIC_STORAGE_ERROR,
         ), 503
 
     return redirect(OTP_LOGIN_PATH)

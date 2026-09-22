@@ -1,0 +1,70 @@
+@startuml
+title Accessible MFA - target system architecture
+left to right direction
+skinparam shadowing false
+skinparam componentStyle rectangle
+skinparam defaultFontName Arial
+skinparam wrapWidth 180
+skinparam maxMessageSize 120
+
+actor "User" as user
+cloud "Accessible email client\n(existing screen reader)" as mailclient
+
+package "Browser" {
+  [Home page\nLog in / Sign up] as home
+  [Accessible pages\nlarge text, focus, labels] as pages
+  [Accessibility controller\nSpeechSynthesis + Web Audio] as a11y
+  [Signed session cookie\nopaque stage/draft id only] as session
+}
+
+package "Flask application" {
+  [Application factory\nconfiguration + blueprints] as factory
+  [Login flow\nusername/password/session stages] as login
+  [Signup flow\ndraft, confirmation, activation] as signup
+  [OTP service\nlogin/signup purpose, expiry, attempts] as otp
+  [Resend adapter\nemail transport] as resend
+  [Argon2 password utilities] as argon
+  [Repository interface\nparameterized SQL] as repo
+}
+
+database "Neon PostgreSQL" as db {
+  [users\nactive flag + Argon2 hash]
+  [signup_drafts\nshort-lived server-side state]
+  [otp_challenges\nHMAC digest + purpose + metadata]
+}
+
+cloud "Resend API" as resend_api
+
+user --> home : keyboard / Enter
+user --> pages : type one task
+pages --> a11y : prompts, focus, status
+a11y --> user : speech + tones
+home --> login
+home --> signup
+login --> otp : password verified
+signup --> otp : signup details confirmed
+login --> argon
+signup --> argon
+login --> session
+signup --> session
+otp --> repo
+repo --> db
+otp --> resend
+resend --> resend_api : HTTPS + API key
+resend_api --> mailclient : OTP email
+mailclient --> user : user reads code
+factory --> login
+factory --> signup
+factory --> otp
+
+note right of session
+  Authentication decisions are made by Flask.
+  No password, OTP, or password hash is stored
+  in the client-readable signed session.
+end note
+
+note bottom of otp
+  Login and signup challenges are purpose-bound.
+  Only a valid challenge can advance its own flow.
+end note
+@enduml

@@ -1,0 +1,39 @@
+flowchart TD
+    H[Home page<br/>large text + spoken instructions] --> L[Log in selected<br/>Tab + Enter]
+    H --> S[Sign up selected<br/>Tab + Enter]
+
+    subgraph LOGIN[Login]
+      L --> LU[Username]
+      LU --> LP[Password]
+      LP -->|valid password| LO[Issue login OTP]
+      LO --> LE[User reads email with existing screen reader]
+      LE --> LV[Enter six-digit login OTP]
+      LV -->|valid, unexpired, unused| W[Welcome]
+      LV -->|wrong / expired / exhausted| LVERR[Error tone + spoken generic error]
+      LVERR --> LV
+      W --> OUT[Logout]
+      OUT --> H
+    end
+
+    subgraph SIGNUP[Signup]
+      S --> SU[Username]
+      SU --> SE[Email]
+      SE --> SP[Choose password]
+      SP --> SC[Confirm password]
+      SC -->|match| SO[Create or update inactive account]
+      SO --> SX[Issue signup OTP]
+      SX --> SME[User reads signup email]
+      SME --> SV[Enter six-digit signup OTP]
+      SV -->|valid| SA[Activate account atomically]
+      SA --> SL[Clear signup state and redirect to login]
+      SL --> H
+      SC -->|mismatch| SPERR[Spoken + visible validation error]
+      SPERR --> SP
+      SV -->|wrong / expired / exhausted| SVERR[Error tone + spoken generic error]
+      SVERR --> SV
+    end
+
+    classDef action fill:#eef6ff,stroke:#245a8d,color:#102a43;
+    classDef security fill:#f7f1e3,stroke:#8b6f2b,color:#3d3012;
+    class H,L,S,W,OUT,SL action;
+    class LO,SO,SX,SA security;

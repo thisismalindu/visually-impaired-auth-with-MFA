@@ -31,7 +31,7 @@ python -m venv .venv
 pip install -r requirements.txt
 ```
 
-Copy `.env.example` to `.env` and set the values below. `.env` is ignored by Git. Apply `database/schema.sql` to the Neon database, then start the app:
+Copy `.env.example` to `.env` and set the values below. `.env` is ignored by Git. Apply `database/schema.sql` to the Neon database in the Neon SQL Editor before provisioning users or starting a full login test, then start the app:
 
 ```text
 python app.py
@@ -53,6 +53,7 @@ Tests use fake database and email services where needed; no live Neon or Resend 
 | --- | --- |
 | `SECRET_KEY` | Flask session signing key; required |
 | `DATABASE_URL` | Neon PostgreSQL connection string; required |
+| `DATABASE_URL_UNPOOLED` | Optional direct connection for schema setup and migration tools; keep the pooled `DATABASE_URL` for application queries |
 | `RESEND_API_KEY` | Resend API credential; required |
 | `RESEND_FROM_EMAIL` | Verified sender address; required |
 | `APP_NAME` | Application name in the OTP email; default `Accessible MFA` |
@@ -95,7 +96,7 @@ User records expose `id`, `username`, `email`, and `password_hash`; challenge re
 
 `auth.flow` owns the stages `username_submitted`, `password_verified`, and `authenticated`. It exposes `auth_bp`, `require_stage(stage)`, `get_verified_user_id()`, and `mark_authenticated()`. The only transition to `authenticated` occurs after successful OTP verification.
 
-`auth.otp` exposes `OTPService.issue(user_id, recipient)` and `OTPService.verify(user_id, submitted_code)`. Its `create_otp_blueprint(service, repository)` provides `GET/POST /login/otp` and `POST /login/otp/resend`. The application factory configures and registers both authentication blueprints.
+`auth.otp` exposes `OTPService.issue(user_id, recipient)` and `OTPService.verify(user_id, submitted_code)`. A hashed challenge is stored before the official Resend SDK is called; a delivery failure invalidates that challenge. Storage, delivery, expiry, attempt-limit, and cooldown failures are converted into safe flow errors. Its `create_otp_blueprint(service, repository)` provides `GET/POST /login/otp` and `POST /login/otp/resend`. The application factory configures and registers both authentication blueprints.
 
 ### Accessibility
 
@@ -103,13 +104,13 @@ The pages are `username.html`, `password.html`, `otp.html`, and `welcome.html`; 
 
 ## Demo users
 
-There is no registration page. After setting `DATABASE_URL` and applying the schema, create a user with:
+There is no registration page. The provisioning command loads the project `.env` automatically. After setting `DATABASE_URL` and applying `database/schema.sql`, create a user with:
 
 ```text
 python -m scripts.create_user
 ```
 
-The script uses `getpass`, hashes the password with Argon2, and calls `database.repository.create_user`. Plaintext passwords are not stored or printed.
+The script uses `getpass`, hashes the password with Argon2, and calls `database.repository.create_user`. It reports missing configuration, missing tables, connection problems, and duplicate accounts without showing credentials or database exception details. Plaintext passwords are not stored or printed.
 
 ## Security rules
 

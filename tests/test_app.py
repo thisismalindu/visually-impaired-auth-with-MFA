@@ -18,6 +18,14 @@ def test_health_returns_success():
     assert response.get_json() == {"status": "ok"}
 
 
+def test_root_redirects_to_login():
+    app = create_app({"TESTING": True, "SECRET_KEY": "test-only-secret"})
+    response = app.test_client().get("/")
+
+    assert response.status_code == 302
+    assert response.headers["Location"].endswith("/login")
+
+
 def test_testing_mode_is_enabled_when_configured():
     app = create_app({"TESTING": True, "SECRET_KEY": "test-only-secret"})
 
@@ -79,6 +87,7 @@ def test_full_authentication_flow_with_fake_database_and_email(monkeypatch):
                 "sent_at": sent_at,
                 "failed_attempts": 0,
             }
+            return self.challenge
 
         def increment_otp_attempts(self, challenge_id):
             self.challenge["failed_attempts"] += 1

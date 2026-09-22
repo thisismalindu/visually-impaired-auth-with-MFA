@@ -3,6 +3,7 @@
 from datetime import datetime, timedelta, timezone
 
 import pytest
+import resend
 from jinja2 import DictLoader
 
 from auth.otp import (
@@ -10,6 +11,7 @@ from auth.otp import (
     OTPResendTooSoon,
     OTPService,
     OTPSettings,
+    OTPStorageError,
     OTPVerificationError,
     ResendEmailSender,
     create_otp_blueprint,
@@ -35,6 +37,7 @@ class FakeRepository:
     def create_otp_challenge(self, user_id, otp_hash, expires_at, sent_at):
         self.challenge = {"id": self.next_id, "user_id": user_id, "otp_hash": otp_hash, "expires_at": expires_at, "sent_at": sent_at, "failed_attempts": 0, "used": False}
         self.next_id += 1
+        return self.challenge
 
     def get_active_otp_challenge(self, user_id):
         if self.challenge and not self.challenge["used"] and self.challenge["user_id"] == user_id:
@@ -144,37 +147,84 @@ def test_attempt_limit_works():
     assert repo.attempt_increments == 2
 
 
-def test_delivery_failure_is_safe_and_does_not_persist_code():
+def test_delivery_failure_invalidates_stored_challenge_and_allows_retry():
     repo = FakeRepository()
-    service, _, _ = make_service(repo=repo, sender=FakeSender(fail=True))
+    sender = FakeSender(fail=True)
+    service, _, _ = make_service(repo=repo, sender=sender)
     with pytest.raises(OTPDeliveryError) as error:
         service.issue(7, "user@example.test")
     assert str(error.value) == "OTP delivery failed"
-    assert repo.challenge is None
+    assert repo.challenge["used"] is True
+    assert repo.get_active_otp_challenge(7) is None
+
+    sender.fail = False
+    service.issue(7, "user@example.test")
+    assert repo.get_active_otp_challenge(7) is not None
 
 
-def test_resend_api_sender_is_mocked_without_network_access():
-    class Response:
-        status = 200
+def test_resend_sdk_sender_uses_configured_key_and_payload(monkeypatch):
+    calls = []
 
-        def __enter__(self):
-            return self
+    def sdk_send(payload):
+        calls.append(payload)
+        return {"id": "message-id"}
 
-        def __exit__(self, *args):
-            return False
-
-    requests = []
-
-    def opener(request, timeout):
-        requests.append((request, timeout))
-        return Response()
-
-    sender = ResendEmailSender("test-api-key", "no-reply@example.test", opener=opener)
+    sender = ResendEmailSender(
+        "test-api-key",
+        "no-reply@example.test",
+        send_email=sdk_send,
+    )
     sender.send("user@example.test", "Your Accessible MFA OTP", "Your code is ready.")
-    request, timeout = requests[0]
-    assert timeout == 10
-    assert request.get_header("Authorization") == "Bearer test-api-key"
-    assert b"Your code is ready." in request.data
+    assert resend.api_key == "test-api-key"
+    assert calls == [{
+        "from": "no-reply@example.test",
+        "to": ["user@example.test"],
+        "subject": "Your Accessible MFA OTP",
+        "text": "Your code is ready.",
+    }]
+
+
+def test_resend_sdk_failure_is_sanitized(caplog):
+    class ProviderError(Exception):
+        code = 403
+
+    secret = "provider-secret-that-must-not-be-logged"
+
+    def sdk_send(_payload):
+        raise ProviderError(secret)
+
+    sender = ResendEmailSender("test-api-key", "no-reply@example.test", send_email=sdk_send)
+    with pytest.raises(OTPDeliveryError, match="OTP delivery failed"):
+        sender.send("user@example.test", "subject", secret)
+
+    assert secret not in caplog.text
+    assert "ProviderError" in caplog.text
+    assert "403" in caplog.text
+
+
+def test_storage_failure_prevents_email_delivery():
+    class FailingRepository(FakeRepository):
+        def create_otp_challenge(self, *args, **kwargs):
+            raise RuntimeError("database details")
+
+    sender = FakeSender()
+    service, _, _ = make_service(repo=FailingRepository(), sender=sender)
+    with pytest.raises(OTPStorageError):
+        service.issue(7, "user@example.test")
+    assert sender.messages == []
+
+
+def test_challenge_is_persisted_before_email_sender_is_called():
+    repo = FakeRepository()
+    observed = []
+
+    class ObservingSender:
+        def send(self, recipient, subject, body):
+            observed.append(repo.get_active_otp_challenge(7) is not None)
+
+    service, _, _ = make_service(repo=repo, sender=ObservingSender())
+    service.issue(7, "user@example.test")
+    assert observed == [True]
 
 
 def test_otp_routes_enforce_password_stage_and_authenticate(monkeypatch):
