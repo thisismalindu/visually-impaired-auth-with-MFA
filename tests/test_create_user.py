@@ -22,8 +22,8 @@ def test_provisioning_loads_database_url_from_project_env(monkeypatch, tmp_path,
     calls = []
     repository_module = ModuleType("database.repository")
     repository_module.DuplicateUserError = type("DuplicateUserError", (ValueError,), {})
-    repository_module.create_user = lambda username, email, password_hash: calls.append(
-        (username, email, password_hash)
+    repository_module.create_user = lambda username, email, password_hash, **kwargs: calls.append(
+        (username, email, password_hash, kwargs)
     )
     _prepare_script(monkeypatch, tmp_path, repository_module)
 
@@ -34,6 +34,7 @@ def test_provisioning_loads_database_url_from_project_env(monkeypatch, tmp_path,
     assert result == 0
     assert calls[0][0:2] == ("demo-user", "demo@example.test")
     assert calls[0][2].startswith("$argon2")
+    assert calls[0][3] == {"email_verified": True}
     assert "my-secret-password" not in calls[0][2]
     assert "Demo user 'demo-user' created." in capsys.readouterr().out
 
@@ -61,7 +62,7 @@ def test_database_failures_are_explained_without_raw_details(
     repository_module = ModuleType("database.repository")
     repository_module.DuplicateUserError = type("DuplicateUserError", (ValueError,), {})
 
-    def fail_to_create(*args):
+    def fail_to_create(*args, **kwargs):
         raise database_error
 
     repository_module.create_user = fail_to_create
@@ -81,7 +82,7 @@ def test_duplicate_account_has_clear_message(monkeypatch, tmp_path, capsys):
     duplicate_error = type("DuplicateUserError", (ValueError,), {})
     repository_module = ModuleType("database.repository")
     repository_module.DuplicateUserError = duplicate_error
-    repository_module.create_user = lambda *args: (_ for _ in ()).throw(
+    repository_module.create_user = lambda *args, **kwargs: (_ for _ in ()).throw(
         duplicate_error("username is already registered")
     )
     _prepare_script(monkeypatch, tmp_path, repository_module)

@@ -1,126 +1,109 @@
 # Accessible MFA
 
-A small Flask application demonstrating keyboard-accessible multifactor login for visually impaired users. The site uses browser SpeechSynthesis for brief instructions and relies on the user's existing screen reader to read email. It does not implement a screen reader.
+Small Flask demonstration for accessible, email-based multifactor authentication. The browser provides semantic keyboard forms, focus, SpeechSynthesis prompts, and optional Web Audio feedback. The server makes every authentication decision.
 
-## Authentication flow
+## Implemented flow
 
-1. The user enters a username.
-2. The user enters a password. The server verifies it against an Argon2 hash.
-3. The server sends a six-digit code to the registered email address. The user enters that code.
-4. The server marks the session authenticated and shows the welcome page.
-5. Logout clears the session.
-
-Each sign-in step is a separate page with a labelled input, keyboard submission, automatic focus, and a spoken instruction. Error and status messages are exposed through accessible live regions. Authentication decisions and stage changes happen on the server.
-
-## Technology
-
-- Python 3.11+ and Flask
-- Neon PostgreSQL through `psycopg[binary]`
-- Argon2 through `argon2-cffi`
-- Resend email API
-- Plain HTML, minimal JavaScript, and browser SpeechSynthesis
-- pytest
-
-## Setup and run
-
-Create a virtual environment and install dependencies:
+Home (`/`) offers **Log in** and **Sign up**. Login is:
 
 ```text
-python -m venv .venv
-.venv\Scripts\activate       # Windows
-pip install -r requirements.txt
+Home -> username -> password -> login OTP -> welcome -> logout -> home
 ```
 
-Copy `.env.example` to `.env` and set the values below. `.env` is ignored by Git. Apply `database/schema.sql` to the Neon database in the Neon SQL Editor before provisioning users or starting a full login test, then start the app:
+Signup is:
 
 ```text
+Home -> username -> email -> password -> confirm password -> signup OTP -> login
+```
+
+Signup creates an inactive user and never creates an authenticated session. A later login requires a new password check and a separate login-purpose OTP.
+
+## Setup
+
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+Copy-Item .env.example .env
+```
+
+Set secret values in `.env`. Do not commit `.env`. `DATABASE_URL` is the pooled Neon URL used by application requests. `DATABASE_URL_UNPOOLED` is the direct Neon URL used only by migrations.
+
+Run the schema before using signup or provisioning:
+
+```powershell
+python -m scripts.migrate
 python app.py
 ```
 
-`GET /health` returns `{"status": "ok"}`. The app factory can also be imported with `from app import create_app`.
-
-Run automated tests with:
-
-```text
-python -m pytest
-```
-
-Tests use fake database and email services where needed; no live Neon or Resend account is required.
+Open <http://127.0.0.1:5000/>. Normal users sign up in the browser. `scripts/create_user.py` remains an optional administrator/testing tool and creates an already active demo account.
 
 ## Environment variables
 
-| Variable | Purpose |
-| --- | --- |
-| `SECRET_KEY` | Flask session signing key; required |
-| `DATABASE_URL` | Neon PostgreSQL connection string; required |
-| `DATABASE_URL_UNPOOLED` | Optional direct connection for schema setup and migration tools; keep the pooled `DATABASE_URL` for application queries |
-| `RESEND_API_KEY` | Resend API credential; required |
-| `RESEND_FROM_EMAIL` | Verified sender address; required |
-| `APP_NAME` | Application name in the OTP email; default `Accessible MFA` |
-| `OTP_EXPIRY_SECONDS` | OTP lifetime; default `300` |
-| `OTP_MAX_ATTEMPTS` | Failed OTP limit; default `5` |
-| `OTP_RESEND_COOLDOWN_SECONDS` | Minimum resend interval; default `60` |
+```text
+SECRET_KEY=
+DATABASE_URL=
+DATABASE_URL_UNPOOLED=
+RESEND_API_KEY=
+RESEND_FROM_EMAIL=
+APP_NAME=Accessible MFA
+OTP_EXPIRY_SECONDS=300
+OTP_MAX_ATTEMPTS=5
+OTP_RESEND_COOLDOWN_SECONDS=60
+SIGNUP_DRAFT_EXPIRY_SECONDS=900
+```
 
-The application checks that required runtime settings are present without displaying their values.
+`RESEND_FROM_EMAIL` must use a sender address from a verified Resend domain. Provider errors are hidden from the browser and secrets/OTP values are not logged.
 
-## Module ownership
+## Database migration
 
-| Member | Branch | Contribution |
+Use the direct/unpooled Neon connection for schema changes:
+
+```powershell
+python -m scripts.migrate
+```
+
+The migration is idempotent and creates or updates `users`, `signup_drafts`, and `otp_challenges`. Existing users are treated as active during the backfill. Apply it before the first browser signup. Never run migrations with the pooled URL.
+
+## Contracts
+
+`database.repository` exposes parameterized operations including `get_user_by_username`, `get_user_by_id`, `get_user_by_email`, `create_user`, `create_signup_draft`, `get_signup_draft`, `update_signup_draft`, `delete_signup_draft`, `create_otp_challenge`, `get_active_otp_challenge(user_id, purpose)`, `increment_otp_attempts`, `mark_otp_used`, `invalidate_active_otp_challenges`, and `activate_user`.
+
+`auth.otp.OTPService.issue(user_id, recipient, purpose="sign_in")` and `verify(user_id, submitted_code, purpose="sign_in")` support `sign_in` and `email_verification`. OTPs are six digits generated with `secrets`, stored only as HMAC digests, expire after five minutes, are attempt-limited, purpose-bound, and single-use.
+
+Login stages are `login_username_submitted`, `login_password_verified`, and `authenticated`. Signup stages are `signup_username_submitted`, `signup_email_submitted`, `signup_password_created`, and `signup_password_confirmed`. The session contains only flow identifiers and stages; signup password hashes and OTP data remain server-side.
+
+## Route ownership
+
+| Area | Module | Status |
 | --- | --- | --- |
-| 1 | `feature/project-foundation` | Configuration, application factory, integration, provisioning, shared contracts |
-| 2 | `feature/accessibility-ui` | Accessible templates and browser speech/focus behavior |
-| 3 | `feature/password-flow` | Username/password verification and session stages |
-| 4 | `feature/neon-database` | PostgreSQL schema, connection, and repository |
-| 5 | `feature/email-otp` | OTP generation, email delivery, verification, expiry, attempts, and cooldown |
+| Factory/configuration/provisioning/integration | Member 1 | Implemented |
+| Accessible templates, focus, SpeechSynthesis, audio cues | Member 2 | Implemented |
+| Username/password and ordered login stages | Member 3 | Implemented |
+| Neon schema, migrations, drafts, repository | Member 4 | Implemented |
+| OTP generation, purpose binding, Resend, verification | Member 5 | Implemented |
 
-## Shared module contracts
+Main routes are `/`, `/login`, `/login/password`, `/login/otp`, `/login/otp/resend`, `/signup`, `/signup/email`, `/signup/password`, `/signup/password/confirm`, `/signup/otp`, `/signup/otp/resend`, `/welcome`, `/logout`, and `/health`.
 
-### Database
+## Security and accessibility rules
 
-`database.repository` provides:
+- Passwords use Argon2; plaintext passwords are never stored, printed, or put in the session.
+- OTP plaintext is never stored. Codes use Python `secrets`, HMAC storage, expiry, attempt limits, purpose binding, cooldown, and atomic single-use consumption.
+- Login errors are generic and inactive accounts cannot sign in.
+- PostgreSQL queries are parameterized. Authentication and activation decisions are server-side.
+- Direct URL navigation cannot bypass a required session stage.
+- Runtime secrets come from environment variables and are excluded by `.gitignore`.
+- Every task has labels, autofocus, Enter submission, live-region errors/status, keyboard navigation, and visible fallback text. The application does not implement a screen reader.
+- Passwords and OTP values are never spoken. OTP audio feedback is a digit-independent confirmation tone only.
+- Production deployment requires HTTPS and secure HTTP-only SameSite cookies.
 
-```text
-get_user_by_username(username) -> user record | None
-get_user_by_id(user_id) -> user record | None
-create_user(username, email, password_hash) -> user record
-create_otp_challenge(user_id, otp_hash, expires_at, sent_at) -> challenge record
-get_active_otp_challenge(user_id) -> challenge record | None
-increment_otp_attempts(challenge_id) -> bool
-mark_otp_used(challenge_id) -> bool
-invalidate_active_otp_challenges(user_id) -> count
+Out of scope: password reset, account management, SMS OTP, authenticator apps, CAPTCHA, social login, native mobile software, and biometric data collection. WebAuthn/passkeys are future work.
+
+## Tests
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest -q
+git diff --check
 ```
 
-User records expose `id`, `username`, `email`, and `password_hash`; challenge records expose `id`, `otp_hash`, `expires_at`, `sent_at`, and `failed_attempts`. Repository SQL uses parameters.
-
-### Authentication and OTP
-
-`auth.flow` owns the stages `username_submitted`, `password_verified`, and `authenticated`. It exposes `auth_bp`, `require_stage(stage)`, `get_verified_user_id()`, and `mark_authenticated()`. The only transition to `authenticated` occurs after successful OTP verification.
-
-`auth.otp` exposes `OTPService.issue(user_id, recipient)` and `OTPService.verify(user_id, submitted_code)`. A hashed challenge is stored before the official Resend SDK is called; a delivery failure invalidates that challenge. Storage, delivery, expiry, attempt-limit, and cooldown failures are converted into safe flow errors. Its `create_otp_blueprint(service, repository)` provides `GET/POST /login/otp` and `POST /login/otp/resend`. The application factory configures and registers both authentication blueprints.
-
-### Accessibility
-
-The pages are `username.html`, `password.html`, `otp.html`, and `welcome.html`; shared focus and speech behavior is in `static/accessibility.js`. Fixed instructions and accessible error/status messages may be spoken. Password and OTP input values are never read by JavaScript.
-
-## Demo users
-
-There is no registration page. The provisioning command loads the project `.env` automatically. After setting `DATABASE_URL` and applying `database/schema.sql`, create a user with:
-
-```text
-python -m scripts.create_user
-```
-
-The script uses `getpass`, hashes the password with Argon2, and calls `database.repository.create_user`. It reports missing configuration, missing tables, connection problems, and duplicate accounts without showing credentials or database exception details. Plaintext passwords are not stored or printed.
-
-## Security rules
-
-- Passwords are stored only as Argon2 hashes; plaintext passwords are never stored, logged, or printed back.
-- OTP codes are generated with Python's `secrets` module; only an HMAC digest is stored.
-- OTPs expire, have a failed-attempt limit and resend cooldown, and can be used only once.
-- PostgreSQL queries are parameterized.
-- Secrets come from environment variables and are not committed.
-- Authentication decisions occur on the server.
-- Session stages protect later pages from direct URL navigation.
-- Production deployment assumes HTTPS; this application does not implement TLS.
-
-Registration, password reset, SMS, authenticator apps, CAPTCHA, account management, biometrics, and custom screen-reader software are outside the project scope. Platform APIs such as WebAuthn may be future work.
+The test suite covers the factory, configuration, repository contracts, provisioning, OTP security, route guards, accessibility markup, migration command, signup validation, and login/logout behavior. A live run additionally requires a migrated Neon database, verified Resend sender, API key, and a mailbox for OTP delivery.

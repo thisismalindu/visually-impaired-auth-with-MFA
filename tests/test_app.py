@@ -18,12 +18,13 @@ def test_health_returns_success():
     assert response.get_json() == {"status": "ok"}
 
 
-def test_root_redirects_to_login():
+def test_root_renders_login_and_signup_actions():
     app = create_app({"TESTING": True, "SECRET_KEY": "test-only-secret"})
     response = app.test_client().get("/")
 
-    assert response.status_code == 302
-    assert response.headers["Location"].endswith("/login")
+    assert response.status_code == 200
+    assert b'href="/login"' in response.data
+    assert b'href="/signup"' in response.data
 
 
 def test_testing_mode_is_enabled_when_configured():
@@ -38,6 +39,15 @@ def test_application_factory_registers_all_login_and_otp_routes():
 
     assert ("/login", ("GET",)) in routes
     assert ("/login", ("POST",)) in routes
+    assert (("/signup"), ("GET",)) in routes
+    assert (("/signup"), ("POST",)) in routes
+    assert (("/signup/email"), ("GET",)) in routes
+    assert (("/signup/email"), ("POST",)) in routes
+    assert (("/signup/password"), ("GET",)) in routes
+    assert (("/signup/password"), ("POST",)) in routes
+    assert (("/signup/otp"), ("GET",)) in routes
+    assert (("/signup/otp"), ("POST",)) in routes
+    assert (("/signup/otp/resend"), ("POST",)) in routes
     assert ("/login/password", ("GET",)) in routes
     assert ("/login/password", ("POST",)) in routes
     assert ("/login/otp", ("GET",)) in routes

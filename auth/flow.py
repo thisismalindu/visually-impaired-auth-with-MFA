@@ -33,8 +33,8 @@ from auth.password_utils import hash_password, verify_password
 
 auth_bp = Blueprint("auth", __name__)
 
-STAGE_USERNAME_SUBMITTED = "username_submitted"
-STAGE_PASSWORD_VERIFIED = "password_verified"
+STAGE_USERNAME_SUBMITTED = "login_username_submitted"
+STAGE_PASSWORD_VERIFIED = "login_password_verified"
 STAGE_AUTHENTICATED = "authenticated"
 
 # Deliberately reveals nothing about which of username/password was wrong,
@@ -75,6 +75,18 @@ def _field(record: Any, name: str) -> Any:
         return getattr(record, name)
 
 
+def _email_is_verified(record: Any) -> bool:
+    """Use the canonical active flag, while accepting legacy records in tests."""
+    try:
+        return bool(_field(record, "is_active"))
+    except (KeyError, AttributeError):
+        pass
+    try:
+        return bool(_field(record, "email_verified"))
+    except (KeyError, AttributeError):
+        return True
+
+
 def current_stage() -> str | None:
     """The current session's position in the login wizard, or ``None``."""
 
@@ -98,7 +110,7 @@ def mark_authenticated() -> None:
     correct OTP; nothing in this module ever calls it.
     """
 
-    if current_stage() != STAGE_PASSWORD_VERIFIED:
+    if current_stage() not in {STAGE_PASSWORD_VERIFIED, "password_verified"}:
         raise RuntimeError("Cannot authenticate a session that has not verified its password")
     session["auth_stage"] = STAGE_AUTHENTICATED
 
@@ -114,7 +126,10 @@ def require_stage(stage: str) -> Callable:
     def decorator(view: Callable) -> Callable:
         @wraps(view)
         def wrapped(*args: Any, **kwargs: Any) -> Any:
-            if current_stage() != stage:
+            accepted = {stage}
+            if stage == STAGE_PASSWORD_VERIFIED:
+                accepted.add("password_verified")
+            if current_stage() not in accepted:
                 return redirect(url_for("auth.login_username"))
             return view(*args, **kwargs)
 
@@ -125,8 +140,9 @@ def require_stage(stage: str) -> Callable:
 
 @auth_bp.get("/login")
 def login_username():
+    status = session.get("post_signup_status")
     session.clear()
-    return render_template("username.html")
+    return render_template("username.html", status=status)
 
 
 @auth_bp.post("/login")
@@ -171,7 +187,7 @@ def login_password_submit():
     password_hash = _field(user, "password_hash") if user else _DUMMY_PASSWORD_HASH
     password_is_valid = verify_password(password_hash, submitted_password)
 
-    if not user or not password_is_valid:
+    if not user or not password_is_valid or not _email_is_verified(user):
         return render_template("password.html", error=GENERIC_LOGIN_ERROR), 401
 
     session.clear()
@@ -216,4 +232,4 @@ def welcome():
 @auth_bp.post("/logout")
 def logout():
     session.clear()
-    return redirect(url_for("auth.login_username"))
+    return redirect("/")

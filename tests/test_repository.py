@@ -33,7 +33,24 @@ def test_create_user_returns_inserted_user():
     with patch("database.repository.connection") as connection:
         connection.return_value.__enter__.return_value = conn
         assert repository.create_user("alice", "a@example.com", "hash") == user
-    assert conn.execute.call_args.args[1] == ("alice", "a@example.com", "hash")
+    assert conn.execute.call_args.args[1] == ("alice", "a@example.com", "hash", False)
+
+
+def test_get_user_by_email_uses_parameterized_query():
+    conn = fake_connection({"id": 1, "email": "alice@example.com"})
+    with patch("database.repository.connection") as connection:
+        connection.return_value.__enter__.return_value = conn
+        assert repository.get_user_by_email("alice@example.com") == {"id": 1, "email": "alice@example.com"}
+    assert conn.execute.call_args.args[1] == ("alice@example.com",)
+    assert "%s" in conn.execute.call_args.args[0]
+
+
+def test_mark_user_email_verified_returns_update_status():
+    conn = fake_connection(rowcount=1)
+    with patch("database.repository.connection") as connection:
+        connection.return_value.__enter__.return_value = conn
+        assert repository.mark_user_email_verified(4) is True
+    assert conn.execute.call_args.args[1] == (4,)
 
 
 @pytest.mark.parametrize(

@@ -66,7 +66,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     password_hash = hash_password(password)
     try:
-        create_user(username, email, password_hash)
+        create_user(username, email, password_hash, email_verified=True)
     except DuplicateUserError:
         print(
             "That username or email is already registered. Choose a different one.",

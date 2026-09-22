@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from typing import Any
 
-from flask import Flask, jsonify, redirect, url_for
+from flask import Flask, jsonify, render_template
 
 from auth.flow import auth_bp
 from auth.otp import OTPService, OTPSettings, ResendEmailSender, create_otp_blueprint
+from auth.signup import signup_bp
 from config import load_config, validate_required_config
 
 
@@ -32,9 +33,11 @@ def _register_integrated_blueprints(app: Flask) -> None:
             ),
         )
     otp_repository = app.config.get("OTP_REPOSITORY", repository)
+    app.extensions["repository"] = otp_repository
     app.extensions["otp_service"] = otp_service
 
     app.register_blueprint(auth_bp)
+    app.register_blueprint(signup_bp)
     app.register_blueprint(
         create_otp_blueprint(otp_service, otp_repository)
     )
@@ -52,6 +55,11 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
     if test_config:
         app.config.update(test_config)
 
+    app.config.setdefault("SESSION_COOKIE_HTTPONLY", True)
+    app.config.setdefault("SESSION_COOKIE_SAMESITE", "Lax")
+    if not app.config.get("TESTING", False):
+        app.config.setdefault("SESSION_COOKIE_SECURE", True)
+
     if not app.config.get("TESTING", False):
         validate_required_config(app.config)
 
@@ -63,7 +71,7 @@ def create_app(test_config: dict[str, Any] | None = None) -> Flask:
 
     @app.get("/")
     def index() -> Any:
-        return redirect(url_for("auth.login_username"))
+        return render_template("home.html")
 
     return app
 

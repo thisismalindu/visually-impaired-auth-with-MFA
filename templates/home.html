@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Accessible MFA</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='styles.css') }}">
+</head>
+<body data-speech-prompt="Choose log in or sign up.">
+  <main>
+    <h1>Accessible MFA</h1>
+    <p id="instruction">Choose whether you want to log in or sign up.</p>
+    <nav aria-label="Account actions">
+      <a href="/login">Log in</a>
+      <a href="/signup">Sign up</a>
+    </nav>
+  </main>
+  <script src="/static/accessibility.js"></script>
+</body>
+</html>

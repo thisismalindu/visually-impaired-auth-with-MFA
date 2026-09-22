@@ -49,6 +49,9 @@ def load_config() -> dict[str, Any]:
         "OTP_RESEND_COOLDOWN_SECONDS": _positive_int(
             "OTP_RESEND_COOLDOWN_SECONDS", 60
         ),
+        "SIGNUP_DRAFT_EXPIRY_SECONDS": _positive_int(
+            "SIGNUP_DRAFT_EXPIRY_SECONDS", 900
+        ),
     }
 
 

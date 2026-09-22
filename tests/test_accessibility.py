@@ -4,7 +4,17 @@ import unittest
 
 
 ROOT = Path(__file__).parents[1]
-TEMPLATE_NAMES = ("username", "password", "otp", "welcome")
+TEMPLATE_NAMES = (
+    "home",
+    "username",
+    "password",
+    "otp",
+    "welcome",
+    "signup_username",
+    "signup_email",
+    "signup_password",
+    "signup_otp",
+)
 
 
 class PageParser(HTMLParser):
@@ -71,6 +81,19 @@ class AccessibilityTemplateTests(unittest.TestCase):
             self.assertIn({"src": "/static/accessibility.js"}, page.scripts)
 
         self.assertEqual(load_template("welcome").inputs, [])
+
+    def test_signup_templates_have_labels_and_focusable_inputs(self):
+        for name in ("signup_username", "signup_email", "signup_otp"):
+            page = load_template(name)
+            self.assertEqual(len(page.inputs), 1)
+            input_id = page.inputs[0]["id"]
+            self.assertIn("autofocus", page.inputs[0])
+            self.assertIn({"for": input_id}, page.labels)
+
+        password_page = load_template("signup_password")
+        self.assertEqual(len(password_page.inputs), 2)
+        self.assertEqual({item["id"] for item in password_page.inputs}, {"password", "password_confirmation"})
+        self.assertTrue(all("autofocus" in item or item["id"] == "password_confirmation" for item in password_page.inputs))
 
     def test_speech_prompts_do_not_read_password_or_otp_values(self):
         password = load_template("password")

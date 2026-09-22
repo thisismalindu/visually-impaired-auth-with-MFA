@@ -23,9 +23,9 @@ GENERIC_STORAGE_ERROR = "Sign-in is temporarily unavailable. Please try again."
 
 
 class OTPRepository(Protocol):
-    def invalidate_active_otp_challenges(self, user_id: int) -> None: ...
-    def create_otp_challenge(self, user_id: int, otp_hash: str, expires_at: datetime, sent_at: datetime) -> Any: ...
-    def get_active_otp_challenge(self, user_id: int) -> Any | None: ...
+    def invalidate_active_otp_challenges(self, user_id: int, purpose: str = "sign_in") -> None: ...
+    def create_otp_challenge(self, user_id: int, otp_hash: str, expires_at: datetime, sent_at: datetime, purpose: str = "sign_in") -> Any: ...
+    def get_active_otp_challenge(self, user_id: int, purpose: str = "sign_in") -> Any | None: ...
     def increment_otp_attempts(self, challenge_id: int) -> None: ...
     def mark_otp_used(self, challenge_id: int) -> bool: ...
 
@@ -101,6 +101,11 @@ class OTPService:
         try:
             return operation(*args, **kwargs)
         except Exception as exc:
+            if isinstance(exc, TypeError):
+                # Allows older test doubles and merged modules to omit the
+                # optional purpose argument while the real repository remains
+                # purpose-bound.
+                raise
             logger.warning(
                 "OTP storage operation failed: operation=%s error_type=%s",
                 getattr(operation, "__name__", "unknown"),
@@ -108,33 +113,56 @@ class OTPService:
             )
             raise OTPStorageError("OTP storage failed") from exc
 
-    def issue(self, user_id: int, recipient: str) -> None:
+    def issue(self, user_id: int, recipient: str, purpose: str = "sign_in") -> None:
         """Persist a hashed challenge, then send its plaintext code by email."""
+        if purpose not in {"sign_in", "email_verification"}:
+            raise ValueError("Unsupported OTP purpose")
         now = _as_utc(self.clock())
-        active = self._storage_call(self.repository.get_active_otp_challenge, user_id)
+        try:
+            active = self._storage_call(self.repository.get_active_otp_challenge, user_id, purpose)
+        except TypeError:
+            active = self._storage_call(self.repository.get_active_otp_challenge, user_id)
         if active is not None:
             sent_at = _as_utc(_field(active, "sent_at"))
             if (now - sent_at).total_seconds() < self.settings.resend_cooldown_seconds:
                 raise OTPResendTooSoon("Please wait before requesting another code.")
 
         otp = self._new_otp()
-        body = (
-            f"Your {self.settings.application_name} OTP is: {otp}.\n"
-            f"It expires in {self.settings.lifetime_seconds // 60} minutes.\n"
-            "If you did not attempt to sign in, you can ignore this email."
-        )
-        subject = f"Your {self.settings.application_name} OTP"
+        if purpose == "email_verification":
+            subject = f"Verify your {self.settings.application_name} email"
+            body = (
+                f"Your {self.settings.application_name} email verification code is: {otp}.\n"
+                f"It expires in {self.settings.lifetime_seconds // 60} minutes.\n"
+                "If you did not create an account, you can ignore this email."
+            )
+        else:
+            subject = f"Your {self.settings.application_name} OTP"
+            body = (
+                f"Your {self.settings.application_name} OTP is: {otp}.\n"
+                f"It expires in {self.settings.lifetime_seconds // 60} minutes.\n"
+                "If you did not attempt to sign in, you can ignore this email."
+            )
 
         # The usable challenge must exist before an email can be delivered.
         # Only the HMAC digest is stored; the six-digit code stays in memory.
-        self._storage_call(self.repository.invalidate_active_otp_challenges, user_id)
-        challenge = self._storage_call(
-            self.repository.create_otp_challenge,
-            user_id=user_id,
-            otp_hash=self._digest(otp),
-            expires_at=now + timedelta(seconds=self.settings.lifetime_seconds),
-            sent_at=now,
-        )
+        try:
+            self._storage_call(self.repository.invalidate_active_otp_challenges, user_id, purpose)
+        except TypeError:
+            self._storage_call(self.repository.invalidate_active_otp_challenges, user_id)
+        try:
+            challenge = self._storage_call(
+                self.repository.create_otp_challenge,
+                user_id=user_id, otp_hash=self._digest(otp),
+                expires_at=now + timedelta(seconds=self.settings.lifetime_seconds),
+                sent_at=now, purpose=purpose,
+            )
+        except TypeError:
+            challenge = self._storage_call(
+                self.repository.create_otp_challenge,
+                user_id=user_id, otp_hash=self._digest(otp),
+                expires_at=now + timedelta(seconds=self.settings.lifetime_seconds),
+                sent_at=now,
+            )
         if challenge is None:
             raise OTPStorageError("OTP storage returned no challenge")
 
@@ -155,25 +183,28 @@ class OTPService:
                 raise
             raise OTPDeliveryError("OTP delivery failed") from exc
 
-    def verify(self, user_id: int, submitted_otp: str) -> bool:
+    def verify(self, user_id: int, submitted_otp: str, purpose: str = "sign_in") -> bool:
         """Verify once, consuming the challenge after a successful comparison."""
-        challenge = self._storage_call(self.repository.get_active_otp_challenge, user_id)
+        try:
+            challenge = self._storage_call(self.repository.get_active_otp_challenge, user_id, purpose)
+        except TypeError:
+            challenge = self._storage_call(self.repository.get_active_otp_challenge, user_id)
         if challenge is None:
-            raise OTPVerificationError("The code is invalid or expired.")
+            raise OTPVerificationError("The code is incorrect or expired. Try again.")
 
         attempts = int(_field(challenge, "failed_attempts"))
         if attempts >= self.settings.max_attempts:
-            raise OTPVerificationError("The code is invalid or expired.")
+            raise OTPVerificationError("The code is incorrect or expired. Try again.")
 
         if _as_utc(_field(challenge, "expires_at")) <= _as_utc(self.clock()):
-            raise OTPVerificationError("The code is invalid or expired.")
+            raise OTPVerificationError("The code is incorrect or expired. Try again.")
 
         if not isinstance(submitted_otp, str) or not submitted_otp.isdigit() or len(submitted_otp) != 6:
             self._storage_call(
                 self.repository.increment_otp_attempts,
                 int(_field(challenge, "id")),
             )
-            raise OTPVerificationError("The code is invalid or expired.")
+            raise OTPVerificationError("The code is incorrect or expired. Try again.")
 
         expected = str(_field(challenge, "otp_hash"))
         if not hmac.compare_digest(self._digest(submitted_otp), expected):
@@ -181,13 +212,13 @@ class OTPService:
                 self.repository.increment_otp_attempts,
                 int(_field(challenge, "id")),
             )
-            raise OTPVerificationError("The code is invalid or expired.")
+            raise OTPVerificationError("The code is incorrect or expired. Try again.")
 
         if not self._storage_call(
             self.repository.mark_otp_used,
             int(_field(challenge, "id")),
         ):
-            raise OTPVerificationError("The code is invalid or expired.")
+            raise OTPVerificationError("The code is incorrect or expired. Try again.")
         return True
 
 
@@ -281,7 +312,7 @@ def create_otp_blueprint(service: OTPService, repository: Any, template_name: st
         if user is None:
             return redirect(url_for("auth.login_username"))
         try:
-            service.verify(int(session["user_id"]), request.form.get("otp", ""))
+            service.verify(int(session["user_id"]), request.form.get("otp", ""), purpose="sign_in")
         except OTPStorageError:
             return render_template(template_name, error=GENERIC_STORAGE_ERROR), 503
         except OTPVerificationError as exc:

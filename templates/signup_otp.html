@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Email verification | Create account</title>
+</head>
+<body data-speech-prompt="Type the six digit code sent to your email.">
+  <main>
+    <h1>Verify your email</h1>
+    <p id="instruction">Type the six digit code sent to your email.</p>
+    {% if error %}
+    <p id="signup-error" role="alert" aria-live="assertive">{{ error }}</p>
+    {% endif %}
+    {% if status %}
+    <p id="signup-status" role="status" aria-live="polite">{{ status }}</p>
+    {% endif %}
+    <form action="/signup/otp" method="post">
+      <label for="otp">Six digit code</label>
+      <input id="otp" name="otp" type="text" inputmode="numeric" autocomplete="one-time-code" pattern="[0-9]{6}" maxlength="6" required autofocus>
+      <button type="submit">Verify email</button>
+    </form>
+    <form action="/signup/otp/resend" method="post">
+      <button type="submit">Send a new code</button>
+    </form>
+  </main>
+  <script src="/static/accessibility.js"></script>
+</body>
+</html>
